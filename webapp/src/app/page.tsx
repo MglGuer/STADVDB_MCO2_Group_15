@@ -1,6 +1,8 @@
 "use client"; 
 
 import { useEffect, useState } from 'react';
+import AddGameButton from '@/components/addGamebutton';
+import UpdateGameButton from '@/components/updateGamebutton';
 
 const HomePage = () => {
   const [status, setStatus] = useState<string>('');
@@ -60,6 +62,10 @@ const HomePage = () => {
             </ul>
           </div>
         )}
+      </div>
+      <div className='mt-10'>
+        <AddGameButton/>
+        <UpdateGameButton/>
       </div>
     </div>
   );
