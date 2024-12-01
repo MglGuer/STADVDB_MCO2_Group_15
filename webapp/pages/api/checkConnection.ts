@@ -14,7 +14,7 @@ const checkConnection = async (req: NextApiRequest, res: NextApiResponse) => {
   } catch (error) {
     
     console.error('Error connecting to the database:', error);
-    res.status(500).json({ message: 'Failed to connect to the database', error: (error as Error).message });
+    res.status(500).json({ message: 'Failed to connect at least 1 database', error: (error as Error).message });
   }
 };
 
