@@ -1,4 +1,3 @@
-
 "use client"
 import { useEffect, useState } from 'react';
 import AddGameButton from '@/components/addGamebutton';
@@ -8,6 +7,8 @@ const HomePage = () => {
   const [status, setStatus] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');  
   const [games, setGames] = useState<any[]>([]);  
+  const [reportsVisible, setReportsVisible] = useState(false);
+  const [reports, setReports] = useState<any[]>([]);
 
   useEffect(() => {
     const checkDatabaseConnection = async () => {
@@ -30,6 +31,21 @@ const HomePage = () => {
       setGames(data.games);  
     } catch (error) {
       console.error('Error fetching games:', error);
+    }
+  };
+
+  const toggleReports = async () => {
+    setReportsVisible(!reportsVisible);
+
+    // Fetch the reports if they are not already fetched
+    if (!reportsVisible) {
+      try {
+        const response = await fetch('/api/getReports');  // Adjust to your API route
+        const data = await response.json();
+        setReports(data.reports);
+      } catch (error) {
+        console.error('Error fetching reports:', error);
+      }
     }
   };
 
@@ -65,6 +81,32 @@ const HomePage = () => {
       <div className="mt-10">
         <AddGameButton />
         <UpdateGameButton />
+      </div>
+
+      <div className="mt-10">
+        <button onClick={toggleReports}>
+          {reportsVisible ? 'Hide Reports' : 'Show Reports'}
+        </button>
+
+        {reportsVisible && (
+          <div>
+            <h3>Top 5 Reports:</h3>
+            <ul style={{ listStyleType: 'none', padding: 0 }}>
+              {reports.map((report, index) => (
+                <li key={index} style={{ marginBottom: '20px', borderBottom: '1px solid #ccc', paddingBottom: '10px' }}>
+                  <h4 style={{ marginBottom: '10px' }}>{report.title}</h4>
+                  <ul style={{ paddingLeft: '20px' }}>
+                    {report.data.map((item: any, i: number) => (
+                      <li key={i} style={{ marginBottom: '5px' }}>
+                        {item.name} - <strong>{item.value}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
