@@ -6,32 +6,55 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
     const reports = [];
 
+    
     const fetchFromNode = async (query: string, yearCondition: string) => {
-      let data = [];
+      let data: RowDataPacket[] = []; 
 
+      
+      let connection;
       try {
-        const [rows] = await replicaConnectionNode2.execute(query + yearCondition);
-        data = rows as RowDataPacket[];
-      } catch {
-        console.warn('Node 2 unavailable, falling back to Node 1 for year condition:', yearCondition);
-        const [fallbackRows] = await primaryConnectionNode1.execute(query + yearCondition);
-        data = fallbackRows as RowDataPacket[];
-      }
+        connection = await primaryConnectionNode1.getConnection();
 
-      if (yearCondition === ">= '2010-01-01'") {
+        await connection.execute('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
+        await connection.beginTransaction();
+        
         try {
-          const [rows] = await replicaConnectionNode3.execute(query + yearCondition);
+          const [rows] = await replicaConnectionNode2.execute(query + yearCondition);
           data = rows as RowDataPacket[];
         } catch {
-          console.warn('Node 3 unavailable, falling back to Node 1 for year condition:', yearCondition);
+          console.warn('Node 2 unavailable, falling back to Node 1 for year condition:', yearCondition);
           const [fallbackRows] = await primaryConnectionNode1.execute(query + yearCondition);
           data = fallbackRows as RowDataPacket[];
+        }
+
+        
+        if (yearCondition === ">= '2010-01-01'") {
+          try {
+            const [rows] = await replicaConnectionNode3.execute(query + yearCondition);
+            data = rows as RowDataPacket[];
+          } catch {
+            console.warn('Node 3 unavailable, falling back to Node 1 for year condition:', yearCondition);
+            const [fallbackRows] = await primaryConnectionNode1.execute(query + yearCondition);
+            data = fallbackRows as RowDataPacket[];
+          }
+        }
+
+        await connection.commit();
+      } catch (error) {
+        if (connection) {
+          await connection.rollback();
+        }
+        console.error('Error fetching data:', error);
+      } finally {
+        if (connection) {
+          connection.release();
         }
       }
 
       return data;
     };
 
+    
     let query = `SELECT name, price FROM dim_game_info ORDER BY price DESC LIMIT 5`;
     const topPriceGames = await fetchFromNode(query, '');
     reports.push({
@@ -44,6 +67,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
       })),
     });
 
+    
     query = `SELECT name, estimated_owners_max FROM dim_game_info ORDER BY estimated_owners_max DESC LIMIT 5`;
     const topOwnersGames = await fetchFromNode(query, '');
     reports.push({
@@ -54,6 +78,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
       })),
     });
 
+    
     query = `SELECT name, price FROM dim_game_info ORDER BY price DESC LIMIT 5`;
     const expensiveGames = await fetchFromNode(query, '');
     reports.push({
@@ -66,6 +91,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
       })),
     });
 
+    
     query = `SELECT name, dlc_count FROM dim_game_info ORDER BY dlc_count DESC LIMIT 5`;
     const dlcGames = await fetchFromNode(query, '');
     reports.push({
@@ -76,6 +102,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
       })),
     });
 
+    
     query = `SELECT name, achievements FROM dim_game_info ORDER BY achievements DESC LIMIT 5`;
     const achievementsGames = await fetchFromNode(query, '');
     reports.push({

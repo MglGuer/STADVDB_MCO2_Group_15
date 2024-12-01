@@ -52,7 +52,7 @@ const HomePage = () => {
   const toggleReports = async () => {
     setReportsVisible(!reportsVisible);
 
-    // Fetch the reports if they are not already fetched
+    
     if (!reportsVisible) {
       try {
         const response = await fetch('/api/getReports');

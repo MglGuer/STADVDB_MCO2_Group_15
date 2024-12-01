@@ -11,10 +11,19 @@ const getGameById = async (req: NextApiRequest, res: NextApiResponse) => {
 
   const query = `SELECT * FROM dim_game_info WHERE game_id = ?`;
 
+  let connection;
   try {
-    const [rows] = await primaryConnectionNode1.execute<RowDataPacket[]>(query, [id]);
+    
+    connection = await primaryConnectionNode1.getConnection();
+    await connection.query('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
+    
+    
+    await connection.beginTransaction();
+
+    const [rows] = await connection.execute<RowDataPacket[]>(query, [id]);
 
     if (rows.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ message: 'Game not found' });
     }
 
@@ -55,12 +64,22 @@ const getGameById = async (req: NextApiRequest, res: NextApiResponse) => {
     }
 
     if (gameFound) {
+      await connection.commit();
       return res.status(200).json({ game });
     } else {
+      await connection.rollback();
       return res.status(404).json({ message: 'Game not found' });
     }
-  } catch {
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+    console.error(error);
     return res.status(500).json({ message: 'Failed to fetch game by ID' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 };
 
