@@ -31,12 +31,8 @@ const AddGameButton = () => {
     };
 
     const handlePackagesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        try {
-            const jsonValue = JSON.parse(e.target.value);
-            setFormData((prev) => ({ ...prev, packages: JSON.stringify(jsonValue, null, 2) }));
-        } catch (error) {
-            console.error('Invalid JSON format:', error);
-        }
+        const { value } = e.target;
+        setFormData((prev) => ({ ...prev, packages: value })); // Raw value for validation later
     };
 
     const toggleFormVisibility = () => {
@@ -45,34 +41,41 @@ const AddGameButton = () => {
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-    
         
+        // Validate JSON for packages
+        let validPackages;
+        try {
+            validPackages = JSON.parse(formData.packages);
+            if (typeof validPackages !== 'object' || Array.isArray(validPackages)) {
+                throw new Error('Packages must be a valid JSON object (not an array).');
+            }
+        } catch (error) {
+            console.error('Invalid JSON for packages:', error);
+            alert('Packages must be a valid JSON object.');
+            return;
+        }
+
         const formDataToSend = {
-            game_id: parseInt(formData.game_id), 
-            name: formData.name,
-            detailed_description: formData.detailed_description,
-            release_date: formData.release_date,
-            required_age: selectedRequirement, 
+            ...formData,
+            game_id: parseInt(formData.game_id),
             price: parseFloat(formData.price),
             estimated_owners_min: parseInt(formData.estimated_owners_min),
             estimated_owners_max: parseInt(formData.estimated_owners_max),
             dlc_count: parseInt(formData.dlc_count),
             achievements: parseInt(formData.achievements),
-            packages: formData.packages, 
-            notes: formData.notes,
+            required_age: selectedRequirement,
+            packages: validPackages,  // Send parsed JSON
         };
-    
+
         try {
-            const response = await fetch('/api/steamGames/addGame.ts', {
+            const response = await fetch('/api/addGame', {  // Removed .ts
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formDataToSend),
             });
-    
+
             const result = await response.json();
-    
+
             if (response.ok) {
                 alert('Game added successfully!');
             } else {
@@ -83,7 +86,6 @@ const AddGameButton = () => {
             alert('An error occurred while submitting the form.');
         }
     };
-    
 
     return (
         <div className="p-4">
@@ -133,19 +135,12 @@ const AddGameButton = () => {
                                 name="required_age"
                                 id="ageRequirement"
                                 value={selectedRequirement}
-                                onChange={(e) => {
-                                    setSelectedRequirement(e.target.value as AgeRequirement);
-                                    handleInputChange(e);
-                                }}
+                                onChange={(e) => setSelectedRequirement(e.target.value as AgeRequirement)}
                                 className="w-full p-2 border rounded"
                             >
-                                <option value="" disabled>
-                                    Select Age Rating
-                                </option>
+                                <option value="" disabled>Select Age Rating</option>
                                 {Object.entries(AgeRequirement).map(([key, value]) => (
-                                    <option key={key} value={key}>
-                                        {value}
-                                    </option>
+                                    <option key={key} value={key}>{value}</option>
                                 ))}
                             </select>
                         </div>
@@ -157,7 +152,7 @@ const AddGameButton = () => {
                                 id="packages"
                                 name="packages"
                                 className="w-full p-2 border rounded"
-                                placeholder="Enter JSON for packages"
+                                placeholder='{"example": "value"}'
                                 value={formData.packages}
                                 onChange={handlePackagesChange}
                             />
