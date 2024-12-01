@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { primaryConnectionNode1, replicaConnectionNode2, replicaConnectionNode3 } from '@/lib/database';
+import { RowDataPacket } from 'mysql2';
 
 const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
   const { name } = req.query;
@@ -9,49 +10,43 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   try {
-    let games = [];
+    let games: RowDataPacket[] = [];
 
-    
-    let query = `SELECT * FROM dim_game_info WHERE name LIKE ?`;
-    const searchPattern = `%${name}%`;
+    const query = `SELECT * FROM dim_game_info WHERE name LIKE ?`;
 
-    
     try {
-      const [rows] = await replicaConnectionNode2.execute(
+      const [rows] = await replicaConnectionNode2.execute<RowDataPacket[]>(
         `${query} AND release_date < '2010-01-01'`,
-        [searchPattern]
+        [`%${name}%`]
       );
-      games = rows as any[];
-    } catch (error) {
+      games = rows;
+    } catch {
       console.warn('Node 2 unavailable, falling back to Node 1 for pre-2010 games.');
-      
-      const [fallbackRows] = await primaryConnectionNode1.execute(
+      const [fallbackRows] = await primaryConnectionNode1.execute<RowDataPacket[]>(
         `${query} AND release_date < '2010-01-01'`,
-        [searchPattern]
+        [`%${name}%`]
       );
-      games = fallbackRows as any[];
+      games = fallbackRows;
     }
 
-    
     try {
-      const [rows] = await replicaConnectionNode3.execute(
+      const [rows] = await replicaConnectionNode3.execute<RowDataPacket[]>(
         `${query} AND release_date >= '2010-01-01'`,
-        [searchPattern]
+        [`%${name}%`]
       );
-      games = [...games, ...(rows as any[])]; 
-    } catch (error) {
+      games = [...games, ...rows];
+    } catch {
       console.warn('Node 3 unavailable, falling back to Node 1 for 2010+ games.');
-      
-      const [fallbackRows] = await primaryConnectionNode1.execute(
+      const [fallbackRows] = await primaryConnectionNode1.execute<RowDataPacket[]>(
         `${query} AND release_date >= '2010-01-01'`,
-        [searchPattern]
+        [`%${name}%`]
       );
-      games = [...games, ...(fallbackRows as any[])];
+      games = [...games, ...fallbackRows];
     }
 
     res.status(200).json({ games });
-  } catch (error) {
-    console.error('Error fetching games:', error);
+  } catch {
+    console.error('Error fetching games');
     res.status(500).json({ error: 'Failed to fetch games.' });
   }
 };

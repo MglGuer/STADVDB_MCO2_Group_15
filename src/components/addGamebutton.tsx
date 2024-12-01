@@ -7,10 +7,25 @@ enum AgeRequirement {
     AO = 'Adults Only',
 }
 
+interface FormData {
+    game_id: string;
+    name: string;
+    detailed_description: string;
+    release_date: string;
+    required_age: string;
+    price: string;
+    estimated_owners_min: string;
+    estimated_owners_max: string;
+    dlc_count: string;
+    achievements: string;
+    packages: string;
+    notes: string;
+}
+
 const AddGameButton = () => {
     const [isFormVisible, setIsFormVisible] = useState(false);
     const [selectedRequirement, setSelectedRequirement] = useState<AgeRequirement | ''>('');
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<FormData>({
         game_id: '',
         name: '',
         detailed_description: '',
@@ -64,11 +79,11 @@ const AddGameButton = () => {
             dlc_count: parseInt(formData.dlc_count),
             achievements: parseInt(formData.achievements),
             required_age: selectedRequirement,
-            packages: validPackages,  // Send parsed JSON
+            packages: validPackages,  
         };
 
         try {
-            const response = await fetch('/api/addGame', {  // Removed .ts
+            const response = await fetch('/api/addGame', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formDataToSend),
@@ -122,7 +137,7 @@ const AddGameButton = () => {
                                     name={name}
                                     className="w-full p-2 border rounded"
                                     placeholder={`Enter ${label.toLowerCase()}`}
-                                    value={(formData as any)[name]}
+                                    value={formData[name as keyof FormData]}
                                     onChange={handleInputChange}
                                 />
                             </div>

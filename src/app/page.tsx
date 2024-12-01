@@ -1,14 +1,29 @@
-"use client"
+"use client";
 import { useEffect, useState } from 'react';
 import AddGameButton from '@/components/addGamebutton';
 import UpdateGameButton from '@/components/UpdateGameButton';
 
+interface Game {
+  name: string;
+  release_date: string;
+}
+
+interface Report {
+  title: string;
+  data: ReportData[];
+}
+
+interface ReportData {
+  name: string;
+  value: string;
+}
+
 const HomePage = () => {
   const [status, setStatus] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');  
-  const [games, setGames] = useState<any[]>([]);  
+  const [games, setGames] = useState<Game[]>([]);  
   const [reportsVisible, setReportsVisible] = useState(false);
-  const [reports, setReports] = useState<any[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
 
   useEffect(() => {
     const checkDatabaseConnection = async () => {
@@ -16,7 +31,7 @@ const HomePage = () => {
         const response = await fetch('/api/checkConnection');
         const data = await response.json();
         setStatus(data.message);
-      } catch (error) {
+      } catch {
         setStatus('Error checking database connection');
       }
     };
@@ -40,7 +55,7 @@ const HomePage = () => {
     // Fetch the reports if they are not already fetched
     if (!reportsVisible) {
       try {
-        const response = await fetch('/api/getReports');  // Adjust to your API route
+        const response = await fetch('/api/getReports');
         const data = await response.json();
         setReports(data.reports);
       } catch (error) {
@@ -96,7 +111,7 @@ const HomePage = () => {
                 <li key={index} style={{ marginBottom: '20px', borderBottom: '1px solid #ccc', paddingBottom: '10px' }}>
                   <h4 style={{ marginBottom: '10px' }}>{report.title}</h4>
                   <ul style={{ paddingLeft: '20px' }}>
-                    {report.data.map((item: any, i: number) => (
+                    {report.data.map((item, i) => (
                       <li key={i} style={{ marginBottom: '5px' }}>
                         {item.name} - <strong>{item.value}</strong>
                       </li>

@@ -7,11 +7,26 @@ enum AgeRequirement {
     AO = 'Adults Only',
 }
 
+interface GameDetails {
+    game_id: string;
+    name: string;
+    detailed_description: string;
+    release_date: string;
+    required_age: string;
+    price: string;
+    estimated_owners_min: string;
+    estimated_owners_max: string;
+    dlc_count: string;
+    achievements: string;
+    packages: string;
+    notes: string;
+}
+
 const UpdateGameButton = () => {
     const [gameId, setGameId] = useState<string>('');
-    const [gameDetails, setGameDetails] = useState<any | null>(null);
+    const [gameDetails, setGameDetails] = useState<GameDetails | null>(null);
     const [selectedRequirement, setSelectedRequirement] = useState<AgeRequirement | ''>('');
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<GameDetails>({
         game_id: '',
         name: '',
         detailed_description: '',
@@ -128,7 +143,7 @@ const UpdateGameButton = () => {
                 <div className="mt-4 p-4 border rounded shadow bg-gray-50">
                     <h2 className="text-lg font-semibold mb-2">Edit Game Details</h2>
                     <form onSubmit={handleSubmit}>
-                        {[
+                        {[ 
                             { label: 'Game ID', name: 'game_id', type: 'number' },
                             { label: 'Name', name: 'name', type: 'text' },
                             { label: 'Detailed Description', name: 'detailed_description', type: 'text' },
@@ -150,7 +165,7 @@ const UpdateGameButton = () => {
                                     name={name}
                                     className="w-full p-2 border rounded"
                                     placeholder={`Enter ${label.toLowerCase()}`}
-                                    value={(formData as any)[name]}
+                                    value={formData[name as keyof GameDetails] || ''}
                                     onChange={handleInputChange}
                                 />
                             </div>
