@@ -1,15 +1,14 @@
-"use client"; 
 
+"use client"
 import { useEffect, useState } from 'react';
 import AddGameButton from '@/components/addGamebutton';
-import UpdateGameButton from '@/components/updateGamebutton';
+import UpdateGameButton from '@/components/UpdateGameButton';
 
 const HomePage = () => {
   const [status, setStatus] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');  
   const [games, setGames] = useState<any[]>([]);  
 
-  
   useEffect(() => {
     const checkDatabaseConnection = async () => {
       try {
@@ -24,7 +23,6 @@ const HomePage = () => {
     checkDatabaseConnection();
   }, []);
 
-  
   const handleSearch = async () => {
     try {
       const response = await fetch(`/api/searchGames?name=${searchQuery}`);
@@ -49,7 +47,7 @@ const HomePage = () => {
           placeholder="Enter game name"
         />
         <button onClick={handleSearch}>Search</button>
-        
+
         {games.length > 0 && (
           <div>
             <h3>Search Results:</h3>
@@ -63,9 +61,10 @@ const HomePage = () => {
           </div>
         )}
       </div>
-      <div className='mt-10'>
-        <AddGameButton/>
-        <UpdateGameButton/>
+
+      <div className="mt-10">
+        <AddGameButton />
+        <UpdateGameButton />
       </div>
     </div>
   );

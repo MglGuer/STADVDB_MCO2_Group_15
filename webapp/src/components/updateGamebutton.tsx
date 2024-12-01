@@ -1,4 +1,4 @@
-import React, { useState} from 'react';
+import React, { useState, useEffect } from 'react';
 
 enum AgeRequirement {
     E = 'Everyone',
@@ -8,8 +8,8 @@ enum AgeRequirement {
 }
 
 const UpdateGameButton = () => {
-    const [isStepOneVisible, setIsStepOneVisible] = useState(true);
-    const [isStepTwoVisible, setIsStepTwoVisible] = useState(false);
+    const [gameId, setGameId] = useState<string>('');
+    const [gameDetails, setGameDetails] = useState<any | null>(null);
     const [selectedRequirement, setSelectedRequirement] = useState<AgeRequirement | ''>('');
     const [formData, setFormData] = useState({
         game_id: '',
@@ -25,8 +25,6 @@ const UpdateGameButton = () => {
         packages: '',
         notes: '',
     });
-    const [gameInput, setGameInput] = useState('');
-    const [gameIdToUpdate, setGameIdToUpdate] = useState<string | null>(null);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -34,74 +32,65 @@ const UpdateGameButton = () => {
     };
 
     const handlePackagesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const { value } = e.target;
+        setFormData((prev) => ({ ...prev, packages: value }));
+    };
+
+    const fetchGameDetails = async (id: string) => {
         try {
-            const jsonValue = JSON.parse(e.target.value);
-            setFormData((prev) => ({ ...prev, packages: JSON.stringify(jsonValue, null, 2) }));
+            const response = await fetch(`/api/getGameById?id=${id}`);
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                alert(errorData.message || 'Game not found');
+                return;
+            }
+    
+            const data = await response.json();
+            if (data.game) {
+                setGameDetails(data.game);
+                setFormData({
+                    ...data.game,
+                    required_age: data.game.required_age as string,
+                    packages: JSON.stringify(data.game.packages),  
+                });
+            }
         } catch (error) {
-            console.error('Invalid JSON format:', error);
+            console.error('Error fetching game:', error);
         }
     };
 
-    const fetchGameData = async (input: string) => {
-        const response = await fetch(`/api/steamGames/getGame?game_id_or_name=${input}`);
-        const data = await response.json();
-        if (response.ok && data) {
-            setFormData({
-                game_id: data.game_id,
-                name: data.name,
-                detailed_description: data.detailed_description,
-                release_date: data.release_date,
-                required_age: data.required_age,
-                price: data.price.toString(),
-                estimated_owners_min: data.estimated_owners_min.toString(),
-                estimated_owners_max: data.estimated_owners_max.toString(),
-                dlc_count: data.dlc_count.toString(),
-                achievements: data.achievements.toString(),
-                packages: JSON.stringify(data.packages, null, 2),
-                notes: data.notes,
-            });
-            setSelectedRequirement(data.required_age as AgeRequirement);
-            setGameIdToUpdate(data.game_id);
-            setIsStepOneVisible(false);
-            setIsStepTwoVisible(true);
-        } else {
-            alert('No game found with that ID or name.');
-        }
-    };
-
-    const handleStepOneSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (gameInput.trim() === '') {
-            alert('Please provide a game ID or name.');
+
+        let validPackages;
+        try {
+            validPackages = JSON.parse(formData.packages);
+            if (typeof validPackages !== 'object' || Array.isArray(validPackages)) {
+                throw new Error('Packages must be a valid JSON object (not an array).');
+            }
+        } catch (error) {
+            console.error('Invalid JSON for packages:', error);
+            alert('Packages must be a valid JSON object.');
             return;
         }
-        fetchGameData(gameInput);
-    };
-
-    const handleStepTwoSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
 
         const formDataToSend = {
+            ...formData,
             game_id: parseInt(formData.game_id),
-            name: formData.name,
-            detailed_description: formData.detailed_description,
-            release_date: formData.release_date,
-            required_age: selectedRequirement,
             price: parseFloat(formData.price),
             estimated_owners_min: parseInt(formData.estimated_owners_min),
             estimated_owners_max: parseInt(formData.estimated_owners_max),
             dlc_count: parseInt(formData.dlc_count),
             achievements: parseInt(formData.achievements),
-            packages: formData.packages,
-            notes: formData.notes,
+            required_age: selectedRequirement,
+            packages: validPackages,  
         };
 
         try {
-            const response = await fetch(`/api/steamGames/updateGame`, {
+            const response = await fetch('/api/updateGame', {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formDataToSend),
             });
 
@@ -113,41 +102,32 @@ const UpdateGameButton = () => {
                 alert(result.message || 'Something went wrong.');
             }
         } catch (error) {
-            console.error('Error submitting form:', error);
-            alert('An error occurred while submitting the form.');
+            console.error('Error updating game:', error);
+            alert('An error occurred while updating the game.');
         }
     };
 
     return (
         <div className="p-4">
-            {isStepOneVisible && (
-                <div>
-                    <h2 className="text-xl font-semibold mb-2">Update Game:</h2>
-                    <form onSubmit={handleStepOneSubmit}>
-                        <div className="mb-4">
-                            <input
-                                type="text"
-                                id="gameInput"
-                                value={gameInput}
-                                onChange={(e) => setGameInput(e.target.value)}
-                                className="w-full p-2 border rounded"
-                                placeholder="Enter Game ID or Name to update"
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                        >
-                            Search Game
-                        </button>
-                    </form>
-                </div>
-            )}
+            <h2 className="text-xl font-semibold mb-4">Update Game:</h2>
+            <input
+                type="text"
+                placeholder="Enter Game ID"
+                value={gameId}
+                onChange={(e) => setGameId(e.target.value)}
+                className="w-full p-2 border rounded mb-4"
+            />
+            <button
+                onClick={() => fetchGameDetails(gameId)}
+                className="px-4 py-2 bg-blue-500 text-white rounded shadow hover:bg-blue-600"
+            >
+                Fetch Game Details
+            </button>
 
-            {isStepTwoVisible && (
+            {gameDetails && (
                 <div className="mt-4 p-4 border rounded shadow bg-gray-50">
-                    <h2 className="text-lg font-semibold mb-2">Update Game Details</h2>
-                    <form onSubmit={handleStepTwoSubmit}>
+                    <h2 className="text-lg font-semibold mb-2">Edit Game Details</h2>
+                    <form onSubmit={handleSubmit}>
                         {[
                             { label: 'Game ID', name: 'game_id', type: 'number' },
                             { label: 'Name', name: 'name', type: 'text' },
@@ -175,7 +155,6 @@ const UpdateGameButton = () => {
                                 />
                             </div>
                         ))}
-
                         <div className="mb-4">
                             <label htmlFor="ageRequirement" className="block font-medium mb-1">
                                 Age Rating
@@ -184,23 +163,15 @@ const UpdateGameButton = () => {
                                 name="required_age"
                                 id="ageRequirement"
                                 value={selectedRequirement}
-                                onChange={(e) => {
-                                    setSelectedRequirement(e.target.value as AgeRequirement);
-                                    handleInputChange(e);
-                                }}
+                                onChange={(e) => setSelectedRequirement(e.target.value as AgeRequirement)}
                                 className="w-full p-2 border rounded"
                             >
-                                <option value="" disabled>
-                                    Select Age Rating
-                                </option>
+                                <option value="" disabled>Select Age Rating</option>
                                 {Object.entries(AgeRequirement).map(([key, value]) => (
-                                    <option key={key} value={key}>
-                                        {value}
-                                    </option>
+                                    <option key={key} value={key}>{value}</option>
                                 ))}
                             </select>
                         </div>
-
                         <div className="mb-4">
                             <label htmlFor="packages" className="block font-medium mb-1">
                                 Packages (JSON)
@@ -209,12 +180,11 @@ const UpdateGameButton = () => {
                                 id="packages"
                                 name="packages"
                                 className="w-full p-2 border rounded"
-                                placeholder="Enter JSON for packages"
+                                placeholder='{"example": "value"}'
                                 value={formData.packages}
                                 onChange={handlePackagesChange}
                             />
                         </div>
-
                         <button
                             type="submit"
                             className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
