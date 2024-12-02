@@ -25,6 +25,14 @@ const HomePage = () => {
   const [reportsVisible, setReportsVisible] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
 
+  
+  const [connectionToggles, setConnectionToggles] = useState({
+    primary: true,
+    replica1: true,
+    replica2: true,
+  });
+
+  
   useEffect(() => {
     const checkDatabaseConnection = async () => {
       try {
@@ -40,6 +48,9 @@ const HomePage = () => {
   }, []);
 
   const handleSearch = async () => {
+    
+    setGames([]);
+    
     try {
       const response = await fetch(`/api/searchGames?name=${searchQuery}`);
       const data = await response.json();
@@ -51,23 +62,76 @@ const HomePage = () => {
 
   const toggleReports = async () => {
     setReportsVisible(!reportsVisible);
-
-    
+  
     if (!reportsVisible) {
       try {
         const response = await fetch('/api/getReports');
         const data = await response.json();
-        setReports(data.reports);
+        
+        if (data.reports) {
+          setReports(data.reports); 
+        } else {
+          setReports([]); 
+        }
       } catch (error) {
         console.error('Error fetching reports:', error);
+        setReports([]); 
       }
     }
+  };
+  
+
+  
+  const handleToggleChange = async (node: 'primary' | 'replica1' | 'replica2') => {
+    const newStatus = !connectionToggles[node];
+    setConnectionToggles({ ...connectionToggles, [node]: newStatus });
+  
+    
+    await fetch(`/api/toggleConnection`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node, status: newStatus }),
+    });
   };
 
   return (
     <div>
       <h1>Database Connection Status</h1>
-      <p>{status}</p>
+      <div>
+        <h3>Connection Status</h3>
+        <p>Primary Node: {connectionToggles.primary ? 'Connected' : 'Disconnected'}</p>
+        <p>Replica Node 1: {connectionToggles.replica1 ? 'Connected' : 'Disconnected'}</p>
+        <p>Replica Node 2: {connectionToggles.replica2 ? 'Connected' : 'Disconnected'}</p>
+      </div>
+
+
+      <div>
+        <h2>Manage Connections</h2>
+        <label>
+          <input
+            type="checkbox"
+            checked={connectionToggles.primary}
+            onChange={() => handleToggleChange('primary')}
+          />
+          Primary Node
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={connectionToggles.replica1}
+            onChange={() => handleToggleChange('replica1')}
+          />
+          Replica Node 1
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={connectionToggles.replica2}
+            onChange={() => handleToggleChange('replica2')}
+          />
+          Replica Node 2
+        </label>
+      </div>
 
       <div>
         <h2>Search for a Game</h2>

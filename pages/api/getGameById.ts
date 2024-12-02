@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { primaryConnectionNode1, replicaConnectionNode2, replicaConnectionNode3 } from '@/lib/database';
+import { getConnection } from '@/lib/database'; 
 import { RowDataPacket } from 'mysql2';
 
 const getGameById = async (req: NextApiRequest, res: NextApiResponse) => {
@@ -14,10 +14,12 @@ const getGameById = async (req: NextApiRequest, res: NextApiResponse) => {
   let connection;
   try {
     
-    connection = await primaryConnectionNode1.getConnection();
+    connection = await getConnection('primary')?.getConnection();
+    if (!connection) {
+      return res.status(500).json({ message: 'Primary database unavailable' });
+    }
+
     await connection.query('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
-    
-    
     await connection.beginTransaction();
 
     const [rows] = await connection.execute<RowDataPacket[]>(query, [id]);
@@ -31,35 +33,64 @@ const getGameById = async (req: NextApiRequest, res: NextApiResponse) => {
     let game = rows[0];
     let gameFound = false;
 
+    
     if (releaseDate && new Date(releaseDate) < new Date('2010-01-01')) {
       try {
-        const [rowsFromNode2] = await replicaConnectionNode2.execute<RowDataPacket[]>(query, [id]);
+        const [rowsFromNode2] = await getConnection('replica1')?.execute<RowDataPacket[]>(query, [id]) ?? [[], []];
         if (rowsFromNode2.length > 0) {
           game = rowsFromNode2[0];
           gameFound = true;
         }
       } catch {
-        console.warn('Node 2 unavailable for pre-2010 games, falling back to Node 1.');
+        console.warn('Node 2 unavailable for pre-2010 games, attempting Node 3.');
+      }
+      
+      
+      if (!gameFound) {
+        try {
+          const [rowsFromNode3] = await getConnection('replica2')?.execute<RowDataPacket[]>(query, [id]) ?? [[], []];
+          if (rowsFromNode3.length > 0) {
+            game = rowsFromNode3[0];
+            gameFound = true;
+          }
+        } catch {
+          console.warn('Node 3 unavailable for pre-2010 games, falling back to Node 1.');
+        }
       }
     }
 
-    if (!gameFound) {
-      const [rowsFromNode1] = await primaryConnectionNode1.execute<RowDataPacket[]>(query, [id]);
-      if (rowsFromNode1.length > 0) {
-        game = rowsFromNode1[0];
-        gameFound = true;
-      }
-    }
-
-    if (releaseDate && new Date(releaseDate) >= new Date('2010-01-01')) {
+    
+    if (!gameFound && releaseDate && new Date(releaseDate) >= new Date('2010-01-01')) {
       try {
-        const [rowsFromNode3] = await replicaConnectionNode3.execute<RowDataPacket[]>(query, [id]);
+        const [rowsFromNode3] = await getConnection('replica2')?.execute<RowDataPacket[]>(query, [id]) ?? [[], []];
         if (rowsFromNode3.length > 0) {
           game = rowsFromNode3[0];
           gameFound = true;
         }
       } catch {
-        console.warn('Node 3 unavailable for 2010+ games, falling back to Node 1.');
+        console.warn('Node 3 unavailable for 2010+ games, attempting Node 2.');
+      }
+
+      
+      if (!gameFound) {
+        try {
+          const [rowsFromNode2] = await getConnection('replica1')?.execute<RowDataPacket[]>(query, [id]) ?? [[], []];
+          if (rowsFromNode2.length > 0) {
+            game = rowsFromNode2[0];
+            gameFound = true;
+          }
+        } catch {
+          console.warn('Node 2 unavailable for 2010+ games, falling back to Node 1.');
+        }
+      }
+    }
+
+    
+    if (!gameFound) {
+      const [rowsFromNode1] = await getConnection('primary')?.execute<RowDataPacket[]>(query, [id]) ?? [[], []];
+      if (rowsFromNode1.length > 0) {
+        game = rowsFromNode1[0];
+        gameFound = true;
       }
     }
 

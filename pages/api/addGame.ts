@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { RowDataPacket } from 'mysql2';
-import { primaryConnectionNode1 } from '@/lib/database';
+import { getConnection } from '@/lib/database'; // Importing getConnection to check connection status
 
 const addGame = async (req: NextApiRequest, res: NextApiResponse) => {
   const {
@@ -19,6 +19,12 @@ const addGame = async (req: NextApiRequest, res: NextApiResponse) => {
   } = req.body;
 
   try {
+    // Check if primary connection is active
+    const primaryConnection = getConnection('primary');
+    if (!primaryConnection) {
+      return res.status(500).json({ message: 'Primary node is not connected.' });
+    }
+
     // Validate input
     if (!game_id || !name || !release_date || !price || !packages) {
       return res.status(400).json({ message: 'Missing required fields.' });
@@ -28,7 +34,7 @@ const addGame = async (req: NextApiRequest, res: NextApiResponse) => {
 
     // Check if game_id already exists
     const checkQuery = 'SELECT COUNT(*) as count FROM dim_game_info WHERE game_id = ?';
-    const [checkResult] = await primaryConnectionNode1.execute<RowDataPacket[]>(checkQuery, [game_id]);
+    const [checkResult] = await primaryConnection.execute<RowDataPacket[]>(checkQuery, [game_id]);
     
     if (checkResult[0].count > 0) {
       return res.status(400).json({ message: 'Game ID already exists.' });
@@ -55,7 +61,7 @@ const addGame = async (req: NextApiRequest, res: NextApiResponse) => {
       notes,
     ];
 
-    await primaryConnectionNode1.execute(insertQuery, values);
+    await primaryConnection.execute(insertQuery, values);
     return res.status(200).json({ message: 'Game added successfully.' });
   } catch (error) {
     console.error('Database error:', error);

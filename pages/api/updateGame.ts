@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { primaryConnectionNode1 } from '@/lib/database';
+import { getConnection } from '@/lib/database'; 
 import { RowDataPacket } from 'mysql2';
 
 interface Game {
@@ -22,7 +22,6 @@ const formatDate = (dateString: string): string => {
   if (isNaN(date.getTime())) {
     throw new Error('Invalid date');
   }
-
   return date.toISOString().split('T')[0];
 };
 
@@ -61,8 +60,23 @@ const updateGame = async (req: NextApiRequest, res: NextApiResponse) => {
     WHERE game_id = ?
   `;
 
+  
+  let connection = getConnection('primary');
+  
+  if (!connection) {
+    
+    connection = getConnection('replica1') || getConnection('replica2');
+    
+    if (!connection) {
+      return res.status(503).json({ error: 'All database nodes are currently unavailable. Please try again later.' });
+    }
+
+    
+    console.warn('Primary node is down, falling back to a replica node.');
+  }
+
   try {
-    const [result] = await primaryConnectionNode1.execute<RowDataPacket[]>(query, [
+    const [result] = await connection.execute<RowDataPacket[]>(query, [
       gameData.name,
       gameData.detailed_description,
       formattedReleaseDate,
@@ -82,8 +96,8 @@ const updateGame = async (req: NextApiRequest, res: NextApiResponse) => {
     } else {
       return res.status(404).json({ error: 'Game not found or no changes made.' });
     }
-  } catch {
-    console.error('Error updating game');
+  } catch (error) {
+    console.error('Error updating game:', error);
     return res.status(500).json({ error: 'Failed to update game.' });
   }
 };
