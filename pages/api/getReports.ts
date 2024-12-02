@@ -1,106 +1,138 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getConnection } from '@/lib/database'; 
+import { getConnection } from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
 
 const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
     const reports = [];
-
-    
     type NodeType = 'primary' | 'replica1' | 'replica2';
 
-    const isAnyNodeEnabled = ['primary', 'replica1', 'replica2'].some((node) => getConnection(node as NodeType) !== null);
-    if (!isAnyNodeEnabled) {
-      return res.status(500).json({ message: 'All nodes are disabled. Cannot generate reports.' });
-    }
-
+    const fetchDataByYear = async (
+      query: string,
+      dateCondition: string,
+      preferredNode: NodeType,
+      fallbackNode: NodeType
+    ): Promise<RowDataPacket[]> => {
+      const nodes = [preferredNode, fallbackNode, 'primary'];
+      let lastError: Error | null = null;
     
-    const fetchFromNode = async (query: string, yearCondition: string, node: 'primary' | 'replica1' | 'replica2') => {
-      let data: RowDataPacket[] = [];
-
+      for (const node of nodes) {
+        const connection = getConnection(node as 'primary' | 'replica1' | 'replica2');
+        if (connection) {
+          try {
+            const [rows] = await connection.execute(`${query} ${dateCondition}`);
+            return rows as RowDataPacket[];
+          } catch (error: unknown) { 
+            lastError = error instanceof Error ? error : new Error('Unknown error'); 
+            console.warn(`Error fetching from ${node}: ${lastError.message}`);
+          }
+        }
+      }
+    
       
-      const connection = getConnection(node);
-      if (!connection) {
-        console.warn(`Connection to ${node} is disabled, falling back to primary node.`);
-        
-        return await fetchFromNode(query, yearCondition, 'primary');
-      }
+      console.error('All nodes failed for the query:', lastError);
+      return []; 
+    };
+    
 
-      try {
-        const [rows] = await connection.execute(query + yearCondition);
-        data = rows as RowDataPacket[];
-      } catch (error) {
-        console.warn(`${node} unavailable for query: ${query}. Error: ${(error as Error).message}`);
-        
-        return await fetchFromNode(query, yearCondition, 'primary');
-      }
-
-      return data;
+    const assembleData = async (
+      query: string,
+      dateConditionNode2: string,
+      dateConditionNode3: string
+    ): Promise<RowDataPacket[]> => {
+      const dataNode2 = await fetchDataByYear(query, dateConditionNode2, 'replica1', 'primary');
+      const dataNode3 = await fetchDataByYear(query, dateConditionNode3, 'replica2', 'primary');
+      
+      return [...dataNode2, ...dataNode3];
     };
 
     
-    let query = `SELECT name, price FROM dim_game_info ORDER BY price DESC LIMIT 5`;
-    const topPriceGames = await fetchFromNode(query, '', 'replica1'); 
-    reports.push({
-      title: 'Top 5 Games by Price',
-      data: topPriceGames.map((game) => ({
-        name: game.name,
-        value: game.price && !isNaN(parseFloat(game.price)) 
-          ? `$${parseFloat(game.price).toFixed(2)}`
-          : 'N/A',
-      })),
-    });
+    const reportConfigs = [
+      {
+        title: 'Top 5 Games by Price',
+        query: `SELECT name, price FROM dim_game_info`,
+        dateConditionNode2: `WHERE release_date < '2010-01-01'`,
+        dateConditionNode3: `WHERE release_date >= '2010-01-01'`,
+        sortField: 'price', 
+        format: (row: any) => ({
+          name: row.name,
+          value: row.price && !isNaN(parseFloat(row.price))
+            ? `$${parseFloat(row.price).toFixed(2)}`
+            : 'N/A',
+        }),
+      },
+      {
+        title: 'Top 5 Games by Estimated Owners',
+        query: `SELECT name, estimated_owners_max FROM dim_game_info`,
+        dateConditionNode2: `WHERE release_date < '2010-01-01'`,
+        dateConditionNode3: `WHERE release_date >= '2010-01-01'`,
+        sortField: 'estimated_owners_max', 
+        format: (row: any) => ({
+          name: row.name,
+          value: row.estimated_owners_max
+            ? row.estimated_owners_max.toLocaleString()
+            : 'N/A',
+        }),
+      },
+      {
+        title: 'Top 5 Games by DLC Count',
+        query: `SELECT name, dlc_count FROM dim_game_info`,
+        dateConditionNode2: `WHERE release_date < '2010-01-01'`,
+        dateConditionNode3: `WHERE release_date >= '2010-01-01'`,
+        sortField: 'dlc_count', 
+        format: (row: any) => ({
+          name: row.name,
+          value: row.dlc_count ? row.dlc_count : 'N/A',
+        }),
+      },
+    ];
 
     
-    query = `SELECT name, estimated_owners_max FROM dim_game_info ORDER BY estimated_owners_max DESC LIMIT 5`;
-    const topOwnersGames = await fetchFromNode(query, '', 'replica2'); 
-    reports.push({
-      title: 'Top 5 Games by Estimated Owners',
-      data: topOwnersGames.map((game) => ({
-        name: game.name,
-        value: game.estimated_owners_max ? game.estimated_owners_max.toLocaleString() : 'N/A',
-      })),
-    });
+    for (const {
+      title,
+      query,
+      dateConditionNode2,
+      dateConditionNode3,
+      sortField,
+      format,
+    } of reportConfigs) {
+      try {
+        const combinedData = await assembleData(query, dateConditionNode2, dateConditionNode3);
 
-    
-    query = `SELECT name, price FROM dim_game_info ORDER BY price DESC LIMIT 5`;
-    const expensiveGames = await fetchFromNode(query, '', 'replica1');
-    reports.push({
-      title: 'Top 5 Most Expensive Games',
-      data: expensiveGames.map((game) => ({
-        name: game.name,
-        value: game.price && !isNaN(parseFloat(game.price)) 
-          ? `$${parseFloat(game.price).toFixed(2)}`
-          : 'N/A',
-      })),
-    });
+        if (combinedData.length === 0) {
+          
+          reports.push({
+            title,
+            data: [{ name: 'No data available', value: 'N/A' }],
+          });
+        } else {
+          
+          const sortedData = combinedData.sort((a, b) => {
+            if (a[sortField] > b[sortField]) return -1;
+            if (a[sortField] < b[sortField]) return 1;
+            return 0;
+          });
 
-    
-    query = `SELECT name, dlc_count FROM dim_game_info ORDER BY dlc_count DESC LIMIT 5`;
-    const dlcGames = await fetchFromNode(query, '', 'replica2');
-    reports.push({
-      title: 'Top 5 Games by DLC Count',
-      data: dlcGames.map((game) => ({
-        name: game.name,
-        value: game.dlc_count ? game.dlc_count : 'N/A',
-      })),
-    });
-
-    
-    query = `SELECT name, achievements FROM dim_game_info ORDER BY achievements DESC LIMIT 5`;
-    const achievementsGames = await fetchFromNode(query, '', 'replica1');
-    reports.push({
-      title: 'Top 5 Games by Achievements',
-      data: achievementsGames.map((game) => ({
-        name: game.name,
-        value: game.achievements ? game.achievements : 'N/A',
-      })),
-    });
+          
+          const top5Data = sortedData.slice(0, 5);
+          reports.push({
+            title,
+            data: top5Data.map(format),
+          });
+        }
+      } catch (error) {
+        console.error(`Failed to fetch report "${title}":`, error);
+        reports.push({
+          title,
+          data: [{ name: 'Error fetching data', value: 'N/A' }],
+        });
+      }
+    }
 
     return res.status(200).json({ reports });
   } catch (error) {
-    console.error('Error fetching reports:', error);
-    return res.status(500).json({ message: 'Failed to fetch reports' });
+    console.error('Error generating reports:', error);
+    return res.status(500).json({ message: 'Failed to generate reports' });
   }
 };
 
