@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getConnection } from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
+import transactionManager from '@/lib/TransactionManager'; 
+import { v4 as uuidv4 } from 'uuid'; 
 
 const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
   const { name } = req.query;
@@ -9,27 +11,38 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
     return res.status(400).json({ error: 'Game name is required.' });
   }
 
+  
+  const transactionId = uuidv4();
+
   try {
     let games: RowDataPacket[] = [];
     const query = `SELECT * FROM dim_game_info WHERE name LIKE ?`;
 
     
     const executeWithTransaction = async (connection: any, query: string, params: any[]) => {
-      await connection.query('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
+      
+      const isolationLevel = transactionManager.hasActiveTransactions() ? 'READ COMMITTED' : 'READ UNCOMMITTED';
+      await connection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
       await connection.query('START TRANSACTION');
 
       try {
-        const [rows] = await connection.execute(query, params) as [RowDataPacket[]];
+        
+        transactionManager.startTransaction(transactionId);
 
+        const [rows] = await connection.execute(query, params) as [RowDataPacket[]];
         await connection.execute('COMMIT');
         return rows;
       } catch (err) {
         await connection.execute('ROLLBACK');
-        console.error('Transaction failed:', err);
+        console.error(`Transaction ${transactionId} failed:`, err);
         throw err;
+      } finally {
+        
+        transactionManager.endTransaction(transactionId);
       }
     };
 
+    
     const node2Connection = getConnection('replica1');
     if (node2Connection) {
       try {
@@ -44,6 +57,7 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     }
 
+    
     if (!node2Connection || games.length === 0) {
       const primaryConnection = getConnection('primary');
       if (primaryConnection) {
@@ -56,6 +70,7 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     }
 
+    
     const node3Connection = getConnection('replica2');
     if (node3Connection) {
       try {
@@ -70,6 +85,7 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     }
 
+    
     if (!node3Connection) {
       const primaryConnection = getConnection('primary');
       if (primaryConnection) {
@@ -84,7 +100,7 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
 
     res.status(200).json({ games });
   } catch (error) {
-    console.error('Error fetching games:', error);
+    console.error(`Error fetching games in transaction ${transactionId}:`, error);
     res.status(500).json({ error: 'Failed to fetch games.' });
   }
 };

@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { RowDataPacket } from 'mysql2';
-import { getConnection } from '@/lib/database'; 
+import { getConnection } from '@/lib/database';
+import transactionManager from '@/lib/TransactionManager'; 
+import { v4 as uuidv4 } from 'uuid'; 
 
 const addGame = async (req: NextApiRequest, res: NextApiResponse) => {
   const {
@@ -18,12 +20,23 @@ const addGame = async (req: NextApiRequest, res: NextApiResponse) => {
     notes,
   } = req.body;
 
+  const transactionId = uuidv4();
+
+  let primaryConnection;
+
   try {
     
-    const primaryConnection = getConnection('primary');
+    transactionManager.startTransaction(transactionId);
+    console.log(`Transaction ${transactionId} started.`);
+
+    primaryConnection = getConnection('primary');
     if (!primaryConnection) {
-      return res.status(500).json({ message: 'Primary node is not connected.' });
+      throw new Error('Primary node is not connected.');
     }
+
+    const isolationLevel = transactionManager.isOnlyTransaction(transactionId) ? 'SERIALIZABLE' : 'READ UNCOMMITTED';
+    await primaryConnection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
+    console.log(`Transaction ${transactionId} started with isolation level: ${isolationLevel}`);
 
     
     if (!game_id || !name || !release_date || !price || !packages) {
@@ -35,7 +48,7 @@ const addGame = async (req: NextApiRequest, res: NextApiResponse) => {
     
     const checkQuery = 'SELECT COUNT(*) as count FROM dim_game_info WHERE game_id = ?';
     const [checkResult] = await primaryConnection.execute<RowDataPacket[]>(checkQuery, [game_id]);
-    
+
     if (checkResult[0].count > 0) {
       return res.status(400).json({ message: 'Game ID already exists.' });
     }
@@ -62,10 +75,23 @@ const addGame = async (req: NextApiRequest, res: NextApiResponse) => {
     ];
 
     await primaryConnection.execute(insertQuery, values);
-    return res.status(200).json({ message: 'Game added successfully.' });
+
+    
+    await primaryConnection.query('COMMIT');
+    res.status(200).json({ message: 'Game added successfully.' });
   } catch (error) {
-    console.error('Database error:', error);
-    return res.status(500).json({ message: 'Failed to add the game.' });
+    console.error(`Error in transaction ${transactionId}:`, error);
+
+    
+    if (primaryConnection) {
+      await primaryConnection.query('ROLLBACK');
+    }
+
+    res.status(500).json({ message: 'Failed to add the game.' });
+  } finally {
+    
+    transactionManager.endTransaction(transactionId);
+    console.log(`Transaction ${transactionId} ended.`);
   }
 };
 

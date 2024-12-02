@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getConnection } from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
+import transactionManager from '@/lib/TransactionManager'; 
+import { v4 as uuidv4 } from 'uuid'; 
 
 const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
   const reports = [];
@@ -14,43 +16,46 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
   ): Promise<RowDataPacket[]> => {
     const nodes = [preferredNode, fallbackNode, 'primary'];
     let lastError: Error | null = null;
+    
+    
+    const transactionId = uuidv4();
 
-    const fetchDataByYear = async (
-      query: string,
-      dateCondition: string,
-      preferredNode: NodeType,
-      fallbackNode: NodeType
-    ): Promise<RowDataPacket[]> => {
-      const nodes = [preferredNode, fallbackNode, 'primary'];
-      let lastError: Error | null = null;
-    
-      for (const node of nodes) {
-        const connection = getConnection(node as 'primary' | 'replica1' | 'replica2');
-        if (connection) {
-          try {
-            
-            await connection.query('START TRANSACTION'); 
-            await connection.query('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED'); 
-    
-            const [rows] = await connection.execute(`${query} ${dateCondition}`);
-            
-            
-            await connection.query('COMMIT'); 
-            return rows as RowDataPacket[];
-          } catch (error: unknown) {
-            lastError = error instanceof Error ? error : new Error('Unknown error');
-            console.warn(`Error fetching from ${node}: ${lastError.message}`);
-            
-            
-            await connection.query('ROLLBACK'); 
+    for (const node of nodes) {
+      const connection = getConnection(node as 'primary' | 'replica1' | 'replica2');
+      if (connection) {
+        try {
+          
+          transactionManager.startTransaction(transactionId);
+          console.log(`Transaction ${transactionId} started on node ${node}.`);
+          
+          
+          if (transactionManager.hasActiveTransactions()) {
+            await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+            console.log(`Transaction ${transactionId} using READ COMMITTED isolation.`);
+          } else {
+            await connection.query('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
+            console.log(`Transaction ${transactionId} using READ UNCOMMITTED isolation.`);
           }
+          
+          await connection.query('START TRANSACTION'); 
+
+          
+          const [rows] = await connection.execute(`${query} ${dateCondition}`);
+          
+          await connection.query('COMMIT'); 
+          return rows as RowDataPacket[];
+        } catch (error: unknown) {
+          lastError = error instanceof Error ? error : new Error('Unknown error');
+          console.warn(`Error fetching from ${node}: ${lastError.message}`);
+          
+          await connection.query('ROLLBACK'); 
+        } finally {
+          
+          transactionManager.endTransaction(transactionId);
+          console.log(`Transaction ${transactionId} ended on node ${node}.`);
         }
       }
-    
-      console.error('All nodes failed for the query:', lastError);
-      return [];
-    };
-    
+    }
 
     console.error('All nodes failed for the query:', lastError);
     return [];

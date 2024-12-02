@@ -1,6 +1,9 @@
+
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getConnection } from '@/lib/database'; 
+import { getConnection } from '@/lib/database';
+import transactionManager from '@/lib/TransactionManager'; 
 import { RowDataPacket } from 'mysql2';
+import { v4 as uuidv4 } from 'uuid'; 
 
 const getGameById = async (req: NextApiRequest, res: NextApiResponse) => {
   const { id } = req.query;
@@ -9,19 +12,27 @@ const getGameById = async (req: NextApiRequest, res: NextApiResponse) => {
     return res.status(400).json({ message: 'Invalid or missing game ID' });
   }
 
-  const query = `SELECT * FROM dim_game_info WHERE game_id = ?`;
+  const transactionId = uuidv4(); 
 
   let connection;
   try {
     
+    transactionManager.startTransaction(transactionId);
+
     connection = await getConnection('primary')?.getConnection();
     if (!connection) {
       return res.status(500).json({ message: 'Primary database unavailable' });
     }
 
-    await connection.query('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
+    
+    const isolationLevel = transactionManager.hasActiveTransactions() ? 'READ COMMITTED' : 'READ UNCOMMITTED';
+    await connection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
+    console.log(`Transaction ${transactionId} started with isolation level: ${isolationLevel}`);
+
     await connection.beginTransaction();
 
+    
+    const query = `SELECT * FROM dim_game_info WHERE game_id = ?`;
     const [rows] = await connection.execute<RowDataPacket[]>(query, [id]);
 
     if (rows.length === 0) {
@@ -44,8 +55,7 @@ const getGameById = async (req: NextApiRequest, res: NextApiResponse) => {
       } catch {
         console.warn('Node 2 unavailable for pre-2010 games, attempting Node 3.');
       }
-      
-      
+
       if (!gameFound) {
         try {
           const [rowsFromNode3] = await getConnection('replica2')?.execute<RowDataPacket[]>(query, [id]) ?? [[], []];
@@ -59,7 +69,6 @@ const getGameById = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     }
 
-    
     if (!gameFound && releaseDate && new Date(releaseDate) >= new Date('2010-01-01')) {
       try {
         const [rowsFromNode3] = await getConnection('replica2')?.execute<RowDataPacket[]>(query, [id]) ?? [[], []];
@@ -71,7 +80,6 @@ const getGameById = async (req: NextApiRequest, res: NextApiResponse) => {
         console.warn('Node 3 unavailable for 2010+ games, attempting Node 2.');
       }
 
-      
       if (!gameFound) {
         try {
           const [rowsFromNode2] = await getConnection('replica1')?.execute<RowDataPacket[]>(query, [id]) ?? [[], []];
@@ -105,12 +113,15 @@ const getGameById = async (req: NextApiRequest, res: NextApiResponse) => {
     if (connection) {
       await connection.rollback();
     }
-    console.error(error);
+    console.error(`Error in transaction ${transactionId}:`, error);
     return res.status(500).json({ message: 'Failed to fetch game by ID' });
   } finally {
+    
+    transactionManager.endTransaction(transactionId);
     if (connection) {
       connection.release();
     }
+    console.log(`Transaction ${transactionId} ended.`);
   }
 };
 

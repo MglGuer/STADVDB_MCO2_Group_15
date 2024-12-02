@@ -47,7 +47,7 @@ const AddGameButton = () => {
 
     const handlePackagesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const { value } = e.target;
-        setFormData((prev) => ({ ...prev, packages: value })); // Raw value for validation later
+        setFormData((prev) => ({ ...prev, packages: value })); 
     };
 
     const toggleFormVisibility = () => {
@@ -57,7 +57,7 @@ const AddGameButton = () => {
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         
-        // Validate JSON for packages
+        
         let validPackages;
         try {
             validPackages = JSON.parse(formData.packages);

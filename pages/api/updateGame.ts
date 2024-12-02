@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getConnection } from '@/lib/database'; 
+import { getConnection } from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
+import transactionManager from '@/lib/TransactionManager'; 
+import { v4 as uuidv4 } from 'uuid'; 
 
 interface Game {
   game_id: number;
@@ -43,39 +45,43 @@ const updateGame = async (req: NextApiRequest, res: NextApiResponse) => {
     return res.status(400).json({ error: 'Invalid release date format.' });
   }
 
-  const query = `
-    UPDATE dim_game_info
-    SET 
-      name = ?, 
-      detailed_description = ?, 
-      release_date = ?, 
-      required_age = ?, 
-      price = ?, 
-      estimated_owners_min = ?, 
-      estimated_owners_max = ?, 
-      dlc_count = ?, 
-      achievements = ?, 
-      packages = ?, 
-      notes = ?
-    WHERE game_id = ?
-  `;
+  const transactionId = uuidv4();
+  
+  let connection;
+  try {
+    
+    transactionManager.startTransaction(transactionId);
+    console.log(`Transaction ${transactionId} started.`);
 
-  
-  let connection = getConnection('primary');
-  
-  if (!connection) {
     
-    connection = getConnection('replica1') || getConnection('replica2');
-    
+    connection = getConnection('primary');
     if (!connection) {
-      return res.status(503).json({ error: 'All database nodes are currently unavailable. Please try again later.' });
+        throw new Error('Primary node is currently unavailable.');
     }
 
     
-    console.warn('Primary node is down, falling back to a replica node.');
-  }
+    const isolationLevel = transactionManager.isOnlyTransaction(transactionId) ? 'SERIALIZABLE' : 'READ UNCOMMITTED';
+    await connection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
+    console.log(`Transaction ${transactionId} started with isolation level: ${isolationLevel}`);
 
-  try {
+
+    const query = `
+      UPDATE dim_game_info
+      SET 
+        name = ?, 
+        detailed_description = ?, 
+        release_date = ?, 
+        required_age = ?, 
+        price = ?, 
+        estimated_owners_min = ?, 
+        estimated_owners_max = ?, 
+        dlc_count = ?, 
+        achievements = ?, 
+        packages = ?, 
+        notes = ?
+      WHERE game_id = ?
+    `;
+
     const [result] = await connection.execute<RowDataPacket[]>(query, [
       gameData.name,
       gameData.detailed_description,
@@ -92,13 +98,25 @@ const updateGame = async (req: NextApiRequest, res: NextApiResponse) => {
     ]);
 
     if ((result as RowDataPacket).affectedRows > 0) {
-      return res.status(200).json({ message: 'Game updated successfully.' });
+      
+      await connection.query('COMMIT;');
+      res.status(200).json({ message: 'Game updated successfully.' });
     } else {
-      return res.status(404).json({ error: 'Game not found or no changes made.' });
+      
+      await connection.query('ROLLBACK;');
+      res.status(404).json({ error: 'Game not found or no changes made.' });
     }
   } catch (error) {
-    console.error('Error updating game:', error);
-    return res.status(500).json({ error: 'Failed to update game.' });
+    console.error(`Error in transaction ${transactionId}:`, error);
+    if (connection) {
+      
+      await connection.query('ROLLBACK;');
+    }
+    res.status(500).json({ error: 'Failed to update game.' });
+  } finally {
+    
+    transactionManager.endTransaction(transactionId);
+    console.log(`Transaction ${transactionId} ended.`);
   }
 };
 
