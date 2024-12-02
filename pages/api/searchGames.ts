@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getConnection } from '@/lib/database'; 
+import { getConnection } from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
 
 const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
@@ -14,10 +14,27 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
     const query = `SELECT * FROM dim_game_info WHERE name LIKE ?`;
 
     
+    const executeWithTransaction = async (connection: any, query: string, params: any[]) => {
+      await connection.query('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
+      await connection.query('START TRANSACTION');
+
+      try {
+        const [rows] = await connection.execute(query, params) as [RowDataPacket[]];
+
+        await connection.execute('COMMIT');
+        return rows;
+      } catch (err) {
+        await connection.execute('ROLLBACK');
+        console.error('Transaction failed:', err);
+        throw err;
+      }
+    };
+
     const node2Connection = getConnection('replica1');
     if (node2Connection) {
       try {
-        const [rows] = await node2Connection.execute<RowDataPacket[]>(
+        const rows = await executeWithTransaction(
+          node2Connection,
           `${query} AND release_date < '2010-01-01'`,
           [`%${name}%`]
         );
@@ -27,11 +44,11 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     }
 
-    
     if (!node2Connection || games.length === 0) {
       const primaryConnection = getConnection('primary');
       if (primaryConnection) {
-        const [fallbackRows] = await primaryConnection.execute<RowDataPacket[]>(
+        const fallbackRows = await executeWithTransaction(
+          primaryConnection,
           `${query} AND release_date < '2010-01-01'`,
           [`%${name}%`]
         );
@@ -39,11 +56,11 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     }
 
-    
     const node3Connection = getConnection('replica2');
     if (node3Connection) {
       try {
-        const [rows] = await node3Connection.execute<RowDataPacket[]>(
+        const rows = await executeWithTransaction(
+          node3Connection,
           `${query} AND release_date >= '2010-01-01'`,
           [`%${name}%`]
         );
@@ -53,11 +70,11 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     }
 
-    
     if (!node3Connection) {
       const primaryConnection = getConnection('primary');
       if (primaryConnection) {
-        const [fallbackRows] = await primaryConnection.execute<RowDataPacket[]>(
+        const fallbackRows = await executeWithTransaction(
+          primaryConnection,
           `${query} AND release_date >= '2010-01-01'`,
           [`%${name}%`]
         );
