@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getConnection } from '@/lib/database';
-import { RowDataPacket } from 'mysql2';
+import { primaryConnectionNode1, replicaConnectionNode2, replicaConnectionNode3 } from '@/lib/database';
 
 const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
   const { name } = req.query;
@@ -10,76 +9,44 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   try {
-    let games: RowDataPacket[] = [];
-    const query = `SELECT * FROM dim_game_info WHERE name LIKE ?`;
+    let games = [];
 
     
-    const executeWithTransaction = async (connection: any, query: string, params: any[]) => {
-      await connection.query('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
-      await connection.query('START TRANSACTION');
+    let query = `SELECT * FROM dim_game_info WHERE name LIKE ?`;
+    const searchPattern = `%${name}%`;
 
-      try {
-        const [rows] = await connection.execute(query, params) as [RowDataPacket[]];
-
-        await connection.execute('COMMIT');
-        return rows;
-      } catch (err) {
-        await connection.execute('ROLLBACK');
-        console.error('Transaction failed:', err);
-        throw err;
-      }
-    };
-
-    const node2Connection = getConnection('replica1');
-    if (node2Connection) {
-      try {
-        const rows = await executeWithTransaction(
-          node2Connection,
-          `${query} AND release_date < '2010-01-01'`,
-          [`%${name}%`]
-        );
-        games = rows;
-      } catch {
-        console.warn('Replica Node 1 unavailable, skipping...');
-      }
+    
+    try {
+      const [rows] = await replicaConnectionNode2.execute(
+        `${query} AND release_date < '2010-01-01'`,
+        [searchPattern]
+      );
+      games = rows as any[];
+    } catch (error) {
+      console.warn('Node 2 unavailable, falling back to Node 1 for pre-2010 games.');
+      
+      const [fallbackRows] = await primaryConnectionNode1.execute(
+        `${query} AND release_date < '2010-01-01'`,
+        [searchPattern]
+      );
+      games = fallbackRows as any[];
     }
 
-    if (!node2Connection || games.length === 0) {
-      const primaryConnection = getConnection('primary');
-      if (primaryConnection) {
-        const fallbackRows = await executeWithTransaction(
-          primaryConnection,
-          `${query} AND release_date < '2010-01-01'`,
-          [`%${name}%`]
-        );
-        games = fallbackRows;
-      }
-    }
-
-    const node3Connection = getConnection('replica2');
-    if (node3Connection) {
-      try {
-        const rows = await executeWithTransaction(
-          node3Connection,
-          `${query} AND release_date >= '2010-01-01'`,
-          [`%${name}%`]
-        );
-        games = [...games, ...rows];
-      } catch {
-        console.warn('Replica Node 2 unavailable, skipping...');
-      }
-    }
-
-    if (!node3Connection) {
-      const primaryConnection = getConnection('primary');
-      if (primaryConnection) {
-        const fallbackRows = await executeWithTransaction(
-          primaryConnection,
-          `${query} AND release_date >= '2010-01-01'`,
-          [`%${name}%`]
-        );
-        games = [...games, ...fallbackRows];
-      }
+    
+    try {
+      const [rows] = await replicaConnectionNode3.execute(
+        `${query} AND release_date >= '2010-01-01'`,
+        [searchPattern]
+      );
+      games = [...games, ...(rows as any[])]; 
+    } catch (error) {
+      console.warn('Node 3 unavailable, falling back to Node 1 for 2010+ games.');
+      
+      const [fallbackRows] = await primaryConnectionNode1.execute(
+        `${query} AND release_date >= '2010-01-01'`,
+        [searchPattern]
+      );
+      games = [...games, ...(fallbackRows as any[])];
     }
 
     res.status(200).json({ games });

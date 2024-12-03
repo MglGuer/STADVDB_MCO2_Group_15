@@ -1,45 +1,22 @@
-"use client";
+"use client"
 import { useEffect, useState } from 'react';
 import AddGameButton from '@/components/addGamebutton';
 import UpdateGameButton from '@/components/UpdateGameButton';
 
-interface Game {
-  name: string;
-  release_date: string;
-}
-
-interface Report {
-  title: string;
-  data: ReportData[];
-}
-
-interface ReportData {
-  name: string;
-  value: string;
-}
-
 const HomePage = () => {
   const [status, setStatus] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');  
-  const [games, setGames] = useState<Game[]>([]);  
+  const [games, setGames] = useState<any[]>([]);  
   const [reportsVisible, setReportsVisible] = useState(false);
-  const [reports, setReports] = useState<Report[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
 
-  
-  const [connectionToggles, setConnectionToggles] = useState({
-    primary: true,
-    replica1: true,
-    replica2: true,
-  });
-
-  
   useEffect(() => {
     const checkDatabaseConnection = async () => {
       try {
         const response = await fetch('/api/checkConnection');
         const data = await response.json();
         setStatus(data.message);
-      } catch {
+      } catch (error) {
         setStatus('Error checking database connection');
       }
     };
@@ -48,9 +25,6 @@ const HomePage = () => {
   }, []);
 
   const handleSearch = async () => {
-    
-    setGames([]);
-    
     try {
       const response = await fetch(`/api/searchGames?name=${searchQuery}`);
       const data = await response.json();
@@ -62,76 +36,23 @@ const HomePage = () => {
 
   const toggleReports = async () => {
     setReportsVisible(!reportsVisible);
-  
+
+    // Fetch the reports if they are not already fetched
     if (!reportsVisible) {
       try {
-        const response = await fetch('/api/getReports');
+        const response = await fetch('/api/getReports');  // Adjust to your API route
         const data = await response.json();
-        
-        if (data.reports) {
-          setReports(data.reports); 
-        } else {
-          setReports([]); 
-        }
+        setReports(data.reports);
       } catch (error) {
         console.error('Error fetching reports:', error);
-        setReports([]); 
       }
     }
-  };
-  
-
-  
-  const handleToggleChange = async (node: 'primary' | 'replica1' | 'replica2') => {
-    const newStatus = !connectionToggles[node];
-    setConnectionToggles({ ...connectionToggles, [node]: newStatus });
-  
-    
-    await fetch(`/api/toggleConnection`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ node, status: newStatus }),
-    });
   };
 
   return (
     <div>
       <h1>Database Connection Status</h1>
-      <div>
-        <h3>Connection Status</h3>
-        <p>Primary Node: {connectionToggles.primary ? 'Connected' : 'Disconnected'}</p>
-        <p>Replica Node 1: {connectionToggles.replica1 ? 'Connected' : 'Disconnected'}</p>
-        <p>Replica Node 2: {connectionToggles.replica2 ? 'Connected' : 'Disconnected'}</p>
-      </div>
-
-
-      <div>
-        <h2>Manage Connections</h2>
-        <label>
-          <input
-            type="checkbox"
-            checked={connectionToggles.primary}
-            onChange={() => handleToggleChange('primary')}
-          />
-          Primary Node
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={connectionToggles.replica1}
-            onChange={() => handleToggleChange('replica1')}
-          />
-          Replica Node 1
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={connectionToggles.replica2}
-            onChange={() => handleToggleChange('replica2')}
-          />
-          Replica Node 2
-        </label>
-      </div>
+      <p>{status}</p>
 
       <div>
         <h2>Search for a Game</h2>
@@ -175,7 +96,7 @@ const HomePage = () => {
                 <li key={index} style={{ marginBottom: '20px', borderBottom: '1px solid #ccc', paddingBottom: '10px' }}>
                   <h4 style={{ marginBottom: '10px' }}>{report.title}</h4>
                   <ul style={{ paddingLeft: '20px' }}>
-                    {report.data.map((item, i) => (
+                    {report.data.map((item: any, i: number) => (
                       <li key={i} style={{ marginBottom: '5px' }}>
                         {item.name} - <strong>{item.value}</strong>
                       </li>

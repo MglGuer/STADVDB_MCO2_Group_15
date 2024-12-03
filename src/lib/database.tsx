@@ -1,50 +1,35 @@
-import mysql, { Pool } from 'mysql2/promise';
+import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 dotenv.config();
 
-
-const connectionStatus = {
-  primary: true,
-  replica1: true,
-  replica2: true,
-};
-
-
-function createConnection(host: string): Pool {
-  return mysql.createPool({
-    host,
+const primaryConnectionNode1 = mysql.createPool({
+    host: process.env.PRIMARY_DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-  });
-}
+});
 
+const replicaConnectionNode2 = mysql.createPool({
+    host: process.env.REPLICA1_DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+});
 
-const primaryConnection = createConnection(process.env.PRIMARY_DB_HOST!);
-const replica1Connection = createConnection(process.env.REPLICA1_DB_HOST!);
-const replica2Connection = createConnection(process.env.REPLICA2_DB_HOST!);
+const replicaConnectionNode3 = mysql.createPool({
+    host: process.env.REPLICA2_DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+});
 
-
-function toggleConnection(node: 'primary' | 'replica1' | 'replica2', status: boolean) {
-  connectionStatus[node] = status;
-}
-
-
-function getConnection(node: 'primary' | 'replica1' | 'replica2'): Pool | null {
-  if (connectionStatus[node]) {
-    switch (node) {
-      case 'primary':
-        return primaryConnection;
-      case 'replica1':
-        return replica1Connection;
-      case 'replica2':
-        return replica2Connection;
-    }
-  }
-  return null; 
-}
-
-export { getConnection, toggleConnection };
+export { primaryConnectionNode1, replicaConnectionNode2, replicaConnectionNode3 };
