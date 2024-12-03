@@ -2,18 +2,6 @@ import mysql, { Pool } from 'mysql2/promise';
 import dotenv from 'dotenv';
 dotenv.config();
 
-console.log('DB_USER:', process.env.DB_USER);
-console.log('DB_PASSWORD:', process.env.DB_PASSWORD);
-console.log('DB_NAME:', process.env.DB_NAME);
-console.log('PRIMARY_DB_HOST:', process.env.PRIMARY_DB_HOST);
-console.log('PRIMARY_DB_PORT:', process.env.PRIMARY_DB_PORT);
-console.log('REPLICA1_DB_HOST:', process.env.REPLICA1_DB_HOST);
-console.log('REPLICA1_DB_PORT:', process.env.REPLICA1_DB_PORT);
-console.log('REPLICA2_DB_HOST:', process.env.REPLICA2_DB_HOST);
-console.log('REPLICA2_DB_PORT:', process.env.REPLICA2_DB_PORT);
-
-
-
 const connectionStatus = {
   primary: true,
   replica1: true,

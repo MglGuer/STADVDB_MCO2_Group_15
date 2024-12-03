@@ -1,10 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { RowDataPacket } from 'mysql2';
-import { getConnection } from '@/lib/database';
-import transactionManager from '@/lib/TransactionManager'; 
+import { getConnection } from '../../src/lib/database';
+import transactionManager from '../../src/lib/TransactionManager'; 
 import { v4 as uuidv4 } from 'uuid'; 
 
 const addGame = async (req: NextApiRequest, res: NextApiResponse) => {
+  console.log('Request body:', req.body);
   const {
     game_id,
     name,
@@ -19,6 +20,7 @@ const addGame = async (req: NextApiRequest, res: NextApiResponse) => {
     packages,
     notes,
   } = req.body;
+  
 
   const transactionId = uuidv4();
 
