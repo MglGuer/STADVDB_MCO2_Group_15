@@ -56,7 +56,6 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
     
     return [...dataNode2, ...dataNode3];
   };
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const reportConfigs = [
     {
       title: 'Top 5 Games by Price',
@@ -64,7 +63,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
       dateConditionNode2: `WHERE release_date < '2010-01-01'`,
       dateConditionNode3: `WHERE release_date >= '2010-01-01'`,
       sortField: 'price',
-      format: (row: any) => ({
+      format: (row: RowDataPacket) => ({
         name: row.name,
         value: row.price && !isNaN(parseFloat(row.price))
           ? `$${parseFloat(row.price).toFixed(2)}`
@@ -77,7 +76,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
       dateConditionNode2: `WHERE release_date < '2010-01-01'`,
       dateConditionNode3: `WHERE release_date >= '2010-01-01'`,
       sortField: 'estimated_owners_max',
-      format: (row: any) => ({
+      format: (row: RowDataPacket) => ({
         name: row.name,
         value: row.estimated_owners_max
           ? row.estimated_owners_max.toLocaleString()
@@ -90,7 +89,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
       dateConditionNode2: `WHERE release_date < '2010-01-01'`,
       dateConditionNode3: `WHERE release_date >= '2010-01-01'`,
       sortField: 'dlc_count',
-      format: (row: any) => ({
+      format: (row: RowDataPacket) => ({
         name: row.name,
         value: row.dlc_count ? row.dlc_count : 'N/A',
       }),
