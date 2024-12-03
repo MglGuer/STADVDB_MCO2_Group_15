@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getConnection } from '@/lib/database';
-import { RowDataPacket, Connection } from 'mysql2/promise';  // Import Connection type
+import { RowDataPacket, Connection } from 'mysql2/promise';  
 import transactionManager from '@/lib/TransactionManager';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -17,7 +17,7 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
     let games: RowDataPacket[] = [];
     const query = `SELECT * FROM dim_game_info WHERE name LIKE ?`;
 
-    // Specify Connection type instead of any
+    
     const executeWithTransaction = async (connection: Connection, query: string, params: any[]) => {
       const isolationLevel = transactionManager.hasActiveTransactions() ? 'READ COMMITTED' : 'READ UNCOMMITTED';
       await connection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
@@ -38,7 +38,7 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     };
 
-    // Rest of the code remains the same...
+    
     const node2Connection = getConnection('replica1');
     if (node2Connection) {
       try {
