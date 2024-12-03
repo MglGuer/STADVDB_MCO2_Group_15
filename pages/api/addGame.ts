@@ -34,7 +34,7 @@ const addGame = async (req: NextApiRequest, res: NextApiResponse) => {
       throw new Error('Primary node is not connected.');
     }
 
-    const isolationLevel = transactionManager.isOnlyTransaction(transactionId) ? 'SERIALIZABLE' : 'READ UNCOMMITTED';
+    const isolationLevel = transactionManager.isOnlyTransaction(transactionId) ? 'READ COMMITTED' : 'READ UNCOMMITTED';
     await primaryConnection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
     console.log(`Transaction ${transactionId} started with isolation level: ${isolationLevel}`);
 

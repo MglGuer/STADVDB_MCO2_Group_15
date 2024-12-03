@@ -60,7 +60,7 @@ const updateGame = async (req: NextApiRequest, res: NextApiResponse) => {
     }
 
     
-    const isolationLevel = transactionManager.isOnlyTransaction(transactionId) ? 'SERIALIZABLE' : 'READ UNCOMMITTED';
+    const isolationLevel = transactionManager.isOnlyTransaction(transactionId) ? 'READ COMMITTED' : 'READ UNCOMMITTED';
     await connection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
     console.log(`Transaction ${transactionId} started with isolation level: ${isolationLevel}`);
 
