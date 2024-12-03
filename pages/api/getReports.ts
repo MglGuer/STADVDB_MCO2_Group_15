@@ -2,7 +2,6 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getConnection } from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
 import transactionManager from '@/lib/TransactionManager'; 
-export const maxDuration = 25;
 
 const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
   const reports = [];
