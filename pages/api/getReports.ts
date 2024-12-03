@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getConnection } from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
 import transactionManager from '@/lib/TransactionManager'; 
-export const maxDuration = 25;
+import { v4 as uuidv4 } from 'uuid'; 
 
 const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
   const reports = [];
@@ -17,16 +17,28 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
     const nodes = [preferredNode, fallbackNode, 'primary'];
     let lastError: Error | null = null;
     
+    
+  
 
     for (const node of nodes) {
       const connection = getConnection(node as 'primary' | 'replica1' | 'replica2');
       if (connection) {
         try {
           
-          const isolationLevel = transactionManager.hasActiveTransactions() ? 'READ COMMITTED' : 'READ UNCOMMITTED';
-          console.log(`Starting read Transaction on node ${node} using ${isolationLevel} isolaton.`);
-          await connection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
-          await connection.query('START TRANSACTION');
+          
+          console.log(`Read Transaction started on node ${node}.`);
+          
+          
+          if (transactionManager.hasActiveTransactions()) {
+            await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+            console.log(`Read Transaction using READ COMMITTED isolation.`);
+          } else {
+            await connection.query('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
+            console.log(`Read Transaction using READ UNCOMMITTED isolation.`);
+          }
+          
+          await connection.query('START TRANSACTION'); 
+
           
           const [rows] = await connection.execute(`${query} ${dateCondition}`);
           
@@ -38,7 +50,8 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
           
           await connection.query('ROLLBACK'); 
         } finally {
-          console.log(`Transaction ended on node ${node}.`);
+          
+          console.log(`Read Transaction ended on node ${node}.`);
         }
       }
     }
@@ -57,6 +70,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
     
     return [...dataNode2, ...dataNode3];
   };
+
   const reportConfigs = [
     {
       title: 'Top 5 Games by Price',
