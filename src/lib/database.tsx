@@ -33,19 +33,29 @@ function toggleConnection(node: 'primary' | 'replica1' | 'replica2', status: boo
 }
 
 
-function getConnection(node: 'primary' | 'replica1' | 'replica2'): Pool | null {
+async function getConnection(node: 'primary' | 'replica1' | 'replica2'): Promise<Pool | null> {
   if (connectionStatus[node]) {
-    switch (node) {
-      case 'primary':
-        return primaryConnection;
-      case 'replica1':
-        return replica1Connection;
-      case 'replica2':
-        return replica2Connection;
+    const connection = node === 'primary' ? primaryConnection :
+                      node === 'replica1' ? replica1Connection :
+                      replica2Connection;
+
+    try {
+      // Test the connection by querying a simple operation
+      const [rows] = await connection.query('SELECT 1');
+      if (rows) {
+        return connection;
+      } else {
+        throw new Error('Connection validation failed.');
+      }
+    } catch (error) {
+      console.error(`Connection to ${node} is not healthy:`, error);
+      connectionStatus[node] = false;
+      return null;
     }
   }
-  return null; 
+  return null;
 }
+
 
 function simulateFailure(node: 'primary' | 'replica1' | 'replica2') {
   toggleConnection(node, false);
@@ -57,4 +67,4 @@ function simulateRecovery(node: 'primary' | 'replica1' | 'replica2') {
   console.log(`Simulated recovery: ${node} is now online.`);
 }
 
-export { getConnection, toggleConnection, simulateFailure, simulateRecovery };
+export { getConnection, toggleConnection, simulateFailure, simulateRecovery};

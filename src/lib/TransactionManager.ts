@@ -1,15 +1,19 @@
-
 class TransactionManager {
-  private activeTransactions: Set<string> = new Set();
+  private activeTransactions: Map<string, { connectionName: string }> = new Map();
 
-  startTransaction(id: string) {
-    this.activeTransactions.add(id);
-    console.log(`Transaction ${id} started.`);
+  startTransaction(id: string, connectionName: string) {
+    this.activeTransactions.set(id, { connectionName });
+    console.log(`Transaction ${id} started on connection: ${connectionName}.`);
   }
 
   endTransaction(id: string) {
-    this.activeTransactions.delete(id);
-    console.log(`Transaction ${id} ended.`);
+    const transaction = this.activeTransactions.get(id);
+    if (transaction) {
+      console.log(`Transaction ${id} ended on connection: ${transaction.connectionName}.`);
+      this.activeTransactions.delete(id);
+    } else {
+      console.log(`Transaction ${id} not found.`);
+    }
   }
 
   isTransactionActive(id: string): boolean {
@@ -20,9 +24,13 @@ class TransactionManager {
     return this.activeTransactions.size > 0;
   }
 
-
   isOnlyTransaction(id: string): boolean {
     return this.activeTransactions.size === 1 && this.activeTransactions.has(id);
+  }
+
+  getTransactionConnection(id: string): string | null {
+    const transaction = this.activeTransactions.get(id);
+    return transaction ? transaction.connectionName : null;
   }
 }
 
