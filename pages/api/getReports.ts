@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getConnection } from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
 import transactionManager from '@/lib/TransactionManager'; 
-import { v4 as uuidv4 } from 'uuid'; 
+export const maxDuration = 25;
 
 const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
   const reports = [];
@@ -17,28 +17,16 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
     const nodes = [preferredNode, fallbackNode, 'primary'];
     let lastError: Error | null = null;
     
-    
-    const transactionId = uuidv4();
 
     for (const node of nodes) {
       const connection = getConnection(node as 'primary' | 'replica1' | 'replica2');
       if (connection) {
         try {
           
-          transactionManager.startTransaction(transactionId);
-          console.log(`Transaction ${transactionId} started on node ${node}.`);
-          
-          
-          if (transactionManager.hasActiveTransactions()) {
-            await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
-            console.log(`Transaction ${transactionId} using READ COMMITTED isolation.`);
-          } else {
-            await connection.query('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
-            console.log(`Transaction ${transactionId} using READ UNCOMMITTED isolation.`);
-          }
-          
-          await connection.query('START TRANSACTION'); 
-
+          const isolationLevel = transactionManager.hasActiveTransactions() ? 'READ COMMITTED' : 'READ UNCOMMITTED';
+          console.log(`Starting read Transaction on node ${node} using ${isolationLevel} isolaton.`);
+          await connection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
+          await connection.query('START TRANSACTION');
           
           const [rows] = await connection.execute(`${query} ${dateCondition}`);
           
@@ -50,9 +38,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
           
           await connection.query('ROLLBACK'); 
         } finally {
-          
-          transactionManager.endTransaction(transactionId);
-          console.log(`Transaction ${transactionId} ended on node ${node}.`);
+          console.log(`Transaction ended on node ${node}.`);
         }
       }
     }
@@ -71,7 +57,6 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
     
     return [...dataNode2, ...dataNode3];
   };
-
   const reportConfigs = [
     {
       title: 'Top 5 Games by Price',
@@ -79,7 +64,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
       dateConditionNode2: `WHERE release_date < '2010-01-01'`,
       dateConditionNode3: `WHERE release_date >= '2010-01-01'`,
       sortField: 'price',
-      format: (row: any) => ({
+      format: (row: RowDataPacket) => ({
         name: row.name,
         value: row.price && !isNaN(parseFloat(row.price))
           ? `$${parseFloat(row.price).toFixed(2)}`
@@ -92,7 +77,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
       dateConditionNode2: `WHERE release_date < '2010-01-01'`,
       dateConditionNode3: `WHERE release_date >= '2010-01-01'`,
       sortField: 'estimated_owners_max',
-      format: (row: any) => ({
+      format: (row: RowDataPacket) => ({
         name: row.name,
         value: row.estimated_owners_max
           ? row.estimated_owners_max.toLocaleString()
@@ -105,7 +90,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
       dateConditionNode2: `WHERE release_date < '2010-01-01'`,
       dateConditionNode3: `WHERE release_date >= '2010-01-01'`,
       sortField: 'dlc_count',
-      format: (row: any) => ({
+      format: (row: RowDataPacket) => ({
         name: row.name,
         value: row.dlc_count ? row.dlc_count : 'N/A',
       }),

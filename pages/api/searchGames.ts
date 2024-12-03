@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getConnection } from '@/lib/database';
-import { RowDataPacket } from 'mysql2';
-import transactionManager from '@/lib/TransactionManager'; 
-import { v4 as uuidv4 } from 'uuid'; 
+import { RowDataPacket, Connection } from 'mysql2/promise';  
+import transactionManager from '@/lib/TransactionManager';
 
 const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
   const { name } = req.query;
@@ -11,34 +10,26 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
     return res.status(400).json({ error: 'Game name is required.' });
   }
 
-  
-  const transactionId = uuidv4();
-
   try {
     let games: RowDataPacket[] = [];
     const query = `SELECT * FROM dim_game_info WHERE name LIKE ?`;
-
     
-    const executeWithTransaction = async (connection: any, query: string, params: any[]) => {
-      
+    const executeWithTransaction = async (connection: Connection, query: string, params: string[]) => {
       const isolationLevel = transactionManager.hasActiveTransactions() ? 'READ COMMITTED' : 'READ UNCOMMITTED';
+      console.log(`Starting read Transaction using ${isolationLevel} isolaton.`);
       await connection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
       await connection.query('START TRANSACTION');
 
       try {
-        
-        transactionManager.startTransaction(transactionId);
 
-        const [rows] = await connection.execute(query, params) as [RowDataPacket[]];
+        const [rows] = await connection.execute<RowDataPacket[]>(query, params);
         await connection.execute('COMMIT');
         return rows;
       } catch (err) {
-        await connection.execute('ROLLBACK');
-        console.error(`Transaction ${transactionId} failed:`, err);
-        throw err;
-      } finally {
-        
-        transactionManager.endTransaction(transactionId);
+        await connection.execute('ROLLBACK');        throw err;
+      }
+      finally {
+          console.log(`Transaction ended.`);
       }
     };
 
@@ -57,7 +48,6 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     }
 
-    
     if (!node2Connection || games.length === 0) {
       const primaryConnection = getConnection('primary');
       if (primaryConnection) {
@@ -70,7 +60,6 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     }
 
-    
     const node3Connection = getConnection('replica2');
     if (node3Connection) {
       try {
@@ -85,7 +74,6 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     }
 
-    
     if (!node3Connection) {
       const primaryConnection = getConnection('primary');
       if (primaryConnection) {
@@ -100,7 +88,7 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
 
     res.status(200).json({ games });
   } catch (error) {
-    console.error(`Error fetching games in transaction ${transactionId}:`, error);
+    console.error(error);
     res.status(500).json({ error: 'Failed to fetch games.' });
   }
 };
