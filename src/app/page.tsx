@@ -98,10 +98,11 @@ const HomePage = () => {
     <div>
       <h1>Database Connection Status</h1>
       <div>
-        <h3>Connection Status</h3>
+        <h3>Status: {status}</h3>
         <p>Primary Node: {connectionToggles.primary ? 'Connected' : 'Disconnected'}</p>
         <p>Replica Node 1: {connectionToggles.replica1 ? 'Connected' : 'Disconnected'}</p>
         <p>Replica Node 2: {connectionToggles.replica2 ? 'Connected' : 'Disconnected'}</p>
+      
       </div>
 
 
