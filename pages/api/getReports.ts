@@ -56,7 +56,7 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
     
     return [...dataNode2, ...dataNode3];
   };
-
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const reportConfigs = [
     {
       title: 'Top 5 Games by Price',
