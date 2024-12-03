@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 
-let connectionStatus = {
+const connectionStatus = {
   primary: false,
   replica1: false,
   replica2: false,
