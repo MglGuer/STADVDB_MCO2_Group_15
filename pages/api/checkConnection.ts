@@ -15,8 +15,10 @@ const checkConnection = async (req: NextApiRequest, res: NextApiResponse) => {
           await connection.getConnection(); 
           statusReport[node] = 'Connected';
         } catch (err) {
+          console.error(`Error connecting to ${node}:`, err); 
           statusReport[node] = 'Connection failed';
         }
+        
       } else {
         statusReport[node] = 'Disabled'; 
       }
