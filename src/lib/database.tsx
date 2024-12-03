@@ -47,4 +47,14 @@ function getConnection(node: 'primary' | 'replica1' | 'replica2'): Pool | null {
   return null; 
 }
 
-export { getConnection, toggleConnection };
+function simulateFailure(node: 'primary' | 'replica1' | 'replica2') {
+  toggleConnection(node, false);
+  console.log(`Simulated failure: ${node} is now offline.`);
+}
+
+function simulateRecovery(node: 'primary' | 'replica1' | 'replica2') {
+  toggleConnection(node, true);
+  console.log(`Simulated recovery: ${node} is now online.`);
+}
+
+export { getConnection, toggleConnection, simulateFailure, simulateRecovery };
