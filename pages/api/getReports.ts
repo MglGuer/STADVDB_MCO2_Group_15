@@ -3,6 +3,7 @@ import { getConnection } from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
 import transactionManager from '@/lib/TransactionManager'; 
 
+
 const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
   const reports = [];
   type NodeType = 'primary' | 'replica1' | 'replica2';
@@ -15,8 +16,6 @@ const getReports = async (req: NextApiRequest, res: NextApiResponse) => {
   ): Promise<RowDataPacket[]> => {
     const nodes = [preferredNode, fallbackNode, 'primary'];
     let lastError: Error | null = null;
-    
-    
   
 
     for (const node of nodes) {
