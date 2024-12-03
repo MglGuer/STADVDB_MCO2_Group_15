@@ -11,30 +11,26 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
     return res.status(400).json({ error: 'Game name is required.' });
   }
 
-  const transactionId = uuidv4();
-
   try {
     let games: RowDataPacket[] = [];
     const query = `SELECT * FROM dim_game_info WHERE name LIKE ?`;
-
     
     const executeWithTransaction = async (connection: Connection, query: string, params: string[]) => {
       const isolationLevel = transactionManager.hasActiveTransactions() ? 'READ COMMITTED' : 'READ UNCOMMITTED';
+      console.log(`Starting read Transaction using ${isolationLevel} isolaton.`);
       await connection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
       await connection.query('START TRANSACTION');
 
       try {
-        transactionManager.startTransaction(transactionId);
 
         const [rows] = await connection.execute<RowDataPacket[]>(query, params);
         await connection.execute('COMMIT');
         return rows;
       } catch (err) {
-        await connection.execute('ROLLBACK');
-        console.error(`Transaction ${transactionId} failed:`, err);
-        throw err;
-      } finally {
-        transactionManager.endTransaction(transactionId);
+        await connection.execute('ROLLBACK');        throw err;
+      }
+      finally {
+          console.log(`Transaction ended.`);
       }
     };
 
@@ -93,7 +89,6 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
 
     res.status(200).json({ games });
   } catch (error) {
-    console.error(`Error fetching games in transaction ${transactionId}:`, error);
     res.status(500).json({ error: 'Failed to fetch games.' });
   }
 };
