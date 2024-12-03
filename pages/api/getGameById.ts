@@ -1,7 +1,7 @@
 
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getConnection } from '@/lib/database';
-import transactionManager from '@/lib/TransactionManager'; 
+import { getConnection } from '../../src/lib/database';
+import transactionManager from '../../src/lib/TransactionManager'; 
 import { RowDataPacket } from 'mysql2';
 import { v4 as uuidv4 } from 'uuid'; 
 
