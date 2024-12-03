@@ -27,9 +27,9 @@ const HomePage = () => {
 
   
   const [connectionToggles, setConnectionToggles] = useState({
-    primary: true,
-    replica1: true,
-    replica2: true,
+    primary: false,
+    replica1: false,
+    replica2: false,
   });
 
   
