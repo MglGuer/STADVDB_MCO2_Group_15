@@ -40,3 +40,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# integration test
+node1_data/
+node2_data/
+node3_data/
+
+node1_dump.sql
+node2_dump.sql
+node3_dump.sql
