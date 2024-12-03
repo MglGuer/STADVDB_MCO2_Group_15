@@ -88,6 +88,7 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
 
     res.status(200).json({ games });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Failed to fetch games.' });
   }
 };
