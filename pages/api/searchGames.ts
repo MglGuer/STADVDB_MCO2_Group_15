@@ -2,7 +2,6 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getConnection } from '@/lib/database';
 import { RowDataPacket, Connection } from 'mysql2/promise';  
 import transactionManager from '@/lib/TransactionManager';
-import { v4 as uuidv4 } from 'uuid';
 
 const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
   const { name } = req.query;
