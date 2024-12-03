@@ -18,7 +18,7 @@ const searchGames = async (req: NextApiRequest, res: NextApiResponse) => {
     const query = `SELECT * FROM dim_game_info WHERE name LIKE ?`;
 
     
-    const executeWithTransaction = async (connection: Connection, query: string, params: any[]) => {
+    const executeWithTransaction = async (connection: Connection, query: string, params: string[]) => {
       const isolationLevel = transactionManager.hasActiveTransactions() ? 'READ COMMITTED' : 'READ UNCOMMITTED';
       await connection.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
       await connection.query('START TRANSACTION');
